@@ -16,5 +16,5 @@ Change training parameters in python file train_RAN.py (e.g. cuda, epochs, embed
 
 Run `> python train_RAN.py` for training
 
-NB. if tanh_act is set to True, the tanh activation function will be used giving the more complex RAN instead of the linear one, when using the linear model with tanh_act set to False, the number of hidden nodes and the embedding_dim should be equal.
+NB. if `tanh_act` is set to `True`, the tanh activation function will be used giving the more complex RAN instead of the linear one, when using the linear model with `tanh_act` set to `False`, the number of hidden nodes and the embedding_dim should be equal.
 
