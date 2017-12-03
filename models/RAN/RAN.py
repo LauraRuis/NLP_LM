@@ -5,8 +5,9 @@ import torch.nn.functional as F
 
 
 class RAN(nn.Module):
-    def __init__(self, embedding_size, vocab_size, hidden_size, act_function=True, pretrained=True):
+    def __init__(self, embedding_size, vocab_size, hidden_size, tie_weights, dropout=0.5, act_function=True, pretrained=True):
         super(RAN, self).__init__()
+        self.drop = nn.Dropout(dropout)
         self.pretrained = pretrained
         self.hidden_size = hidden_size
         self.embedding_size = embedding_size
@@ -20,11 +21,16 @@ class RAN(nn.Module):
         self.x2f = nn.Linear(embedding_size, hidden_size)
         self.h2o = nn.Linear(hidden_size, vocab_size)
 
+        if tie_weights:
+            if self.hidden_size != self.embedding_size:
+                raise ValueError('When using the tied flag, hidden size must be equal to embedding size')
+            self.h2o.weight = self.embeddings.weight
+
     def forward(self, word, hidden, latent, content=0):
 
         # use pre-trained embeddings or make own embeddings
         if not self.pretrained:
-            embeds = self.embeddings(word).view((1, -1))
+            embeds = self.embeddings(word)
         else:
             embeds = []
 
@@ -37,8 +43,9 @@ class RAN(nn.Module):
             forget_gate = F.sigmoid(temp_f)
             latent = torch.mul(input_gate, content) + torch.mul(forget_gate, latent)
             hidden = F.tanh(latent)
-            output = self.h2o(hidden)
-            output = F.log_softmax(output)
+            dropped = self.drop(hidden)
+            output = self.h2o(dropped)
+            # output = F.log_softmax(output)
             return content, latent, hidden, output
         else:
             temp_i = self.h2i(latent) + self.x2i(embeds)
@@ -46,12 +53,13 @@ class RAN(nn.Module):
             temp_f = self.h2f(latent) + self.x2f(embeds)
             forget_gate = F.sigmoid(temp_f)
             latent = torch.mul(input_gate, embeds) + torch.mul(forget_gate, latent)
-            output = self.h2o(latent)
-            output = F.log_softmax(output)
+            dropped = self.drop(latent)
+            output = self.h2o(dropped)
+            # output = F.log_softmax(output)
             return latent, hidden, output
 
-    def initVars(self, cud):
-        hidden = Variable(torch.zeros(1, self.hidden_size))
+    def initVars(self, cud, bsz):
+        hidden = Variable(torch.zeros(bsz, self.hidden_size))
         if cud:
-            hidden = Variable(torch.zeros(1, self.hidden_size).cuda())
+            hidden = Variable(torch.zeros(bsz, self.hidden_size).cuda())
         return hidden
