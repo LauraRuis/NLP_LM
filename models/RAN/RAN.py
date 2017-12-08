@@ -5,11 +5,11 @@ import torch.nn.functional as F
 
 
 class RAN(nn.Module):
-    def __init__(self, embedding_size, vocab_size, hidden_size, tie_weights, dropout=0.5, act_function=True, pretrained=True):
+    def __init__(self, embedding_size, vocab_size, hidden_size, tie_weights, softmax, dropout=0.5, act_function=True):
         super(RAN, self).__init__()
         self.drop = nn.Dropout(dropout)
-        self.pretrained = pretrained
         self.hidden_size = hidden_size
+        self.softmax = softmax
         self.embedding_size = embedding_size
         self.vocab_size = vocab_size
         self.activation_func = act_function
@@ -23,17 +23,13 @@ class RAN(nn.Module):
 
         if tie_weights:
             if self.hidden_size != self.embedding_size:
-                raise ValueError('When using the tied flag, hidden size must be equal to embedding size')
+                raise ValueError('When using the weight tying, hidden size must be equal to embedding size')
             self.h2o.weight = self.embeddings.weight
 
     def forward(self, word, hidden, latent, content=0):
 
-        # use pre-trained embeddings or make own embeddings
-        if not self.pretrained:
-            embeds = self.embeddings(word)
-        else:
-            embeds = []
-
+        # set embeddings
+        embeds = self.embeddings(word)
         # nonlinear activation function or identity activation function
         if self.activation_func:
             content = self.x2c(embeds)
@@ -45,17 +41,21 @@ class RAN(nn.Module):
             hidden = F.tanh(latent)
             dropped = self.drop(hidden)
             output = self.h2o(dropped)
-            # output = F.log_softmax(output)
+            if self.softmax:
+                output = F.log_softmax(output)
             return content, latent, hidden, output
         else:
             temp_i = self.h2i(latent) + self.x2i(embeds)
             input_gate = F.sigmoid(temp_i)
+            print(input_gate)
             temp_f = self.h2f(latent) + self.x2f(embeds)
             forget_gate = F.sigmoid(temp_f)
+            print(forget_gate)
             latent = torch.mul(input_gate, embeds) + torch.mul(forget_gate, latent)
             dropped = self.drop(latent)
             output = self.h2o(dropped)
-            # output = F.log_softmax(output)
+            if self.softmax:
+                output = F.log_softmax(output)
             return latent, hidden, output
 
     def initVars(self, cud, bsz):
