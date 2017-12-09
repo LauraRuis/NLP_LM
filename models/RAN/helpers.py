@@ -34,7 +34,7 @@ def repackage_hidden(h):
         return tuple(repackage_hidden(v) for v in h)
 
 
-def evaluate(model, corpus, criterion, data_source, cuda, bsz, bptt, tanh_act):
+def evaluate(model, corpus, criterion, data_source, cuda, bsz, bptt):
 
     # disable dropout
     model.eval()
@@ -42,16 +42,12 @@ def evaluate(model, corpus, criterion, data_source, cuda, bsz, bptt, tanh_act):
     # Turn on evaluation mode which disables dropout.
     total_loss = 0
     ntokens = len(corpus.dictionary)
-    hidden = model.initVars(cuda, bsz)
-    latent = model.initVars(cuda, bsz)
-    content = model.initVars(cuda, bsz)
+    hidden = model.init_states(cuda, bsz)
+    latent = model.init_states(cuda, bsz)
     for i in range(0, data_source.size(0) - 1, bptt):
         context, target = get_batch(data_source, i, bptt, evaluation=True)
         if target.size(0) == bsz * bptt:
-            if tanh_act:
-                content, latent, hidden, log_probs = model(context, hidden, latent, content)
-            else:
-                latent, hidden, log_probs = model(context, hidden, latent)
+            latent, hidden, log_probs = model(context, hidden, latent)
             output_flat = log_probs.view(-1, ntokens)
             total_loss += len(context) * criterion(output_flat, target).data
             hidden = repackage_hidden(hidden)

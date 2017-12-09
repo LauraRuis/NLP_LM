@@ -13,22 +13,21 @@ torch.manual_seed(1)
 ########################################################################################################################
 # adjustable parameters
 ########################################################################################################################
-TANH_ACT = False
 TIE_WEIGHTS = True
-CUDA = True
 DROPOUT = 0.5
 EMBEDDING_DIM = 50
 BPTT = 35
 BSZ = 10
 HIDDEN_SIZE = 50
+LR = 0.02
+CLIP = 0.25
+########################################################################################################################
 EPOCHS = 50
 PRINT_EVERY = 500
-LR = 20
-CLIP = 0.25
-LOSS_FUNC = "CrossEnt"  # options: CrossEnt or NLLLoss
-DATA_FILE = "../../data/penn/"
-CONTINUE_TRAINING = False
-SAVED_NN = "hidden_50-embed_50_tanh_False_drop_0.5_tying_True.pt"
+CUDA = True
+LOSS_FUNC = "CrossEnt"  # options: CrossEnt or NLLLoss (if using NLLLoss add softmax to forward method before training)
+DATA_FILE = "../../data/penn/"  # options: Penn Treebank or Alphabet
+CONTINUE_TRAINING = True  # use if want to continue training on old pt file
 ########################################################################################################################
 
 # save decoders
@@ -39,14 +38,14 @@ ENCODER = open("encoder.json", "w")
 NN_FILENAME = \
     "NNs/hidden_" + str(HIDDEN_SIZE) + \
     "-embed_" + str(EMBEDDING_DIM) + \
-    "_tanh_" + str(TANH_ACT) + \
     "_drop_" + str(DROPOUT) + \
-    "_tying_" + str(TIE_WEIGHTS) + "/model.pt"
+    "_tying_" + str(TIE_WEIGHTS) + ".pt"
 
 # read data
 corpus = Corpus(DATA_FILE, CUDA)
 vocab_size = len(corpus.dictionary)
 if CONTINUE_TRAINING:
+    SAVED_NN = NN_FILENAME
     print("Continuing training on old model in file ", NN_FILENAME)
 print("|V|", vocab_size)
 
@@ -71,7 +70,7 @@ if CONTINUE_TRAINING:
         model = torch.load(f)
 else:
     # initialize model
-    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE, TIE_WEIGHTS, softmax, DROPOUT, TANH_ACT)
+    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE, TIE_WEIGHTS, softmax, DROPOUT)
 
 if CUDA:
     model.cuda()
@@ -95,9 +94,8 @@ def train():
     ntokens = len(corpus.dictionary)
 
     # initialize hidden, latent and content layers with zero filled tensors
-    hidden = model.initVars(CUDA, BSZ)
-    latent = model.initVars(CUDA, BSZ)
-    content = model.initVars(CUDA, BSZ)
+    hidden = model.init_states(CUDA, BSZ)
+    latent = model.init_states(CUDA, BSZ)
 
     # loop over all data
     for batch, i in enumerate(range(0, training_data.size(0) - 1, BPTT)):
@@ -114,11 +112,8 @@ def train():
         # only use batch if dimensions are correct
         if target.size(0) == BSZ * BPTT:
 
-            # depending on choice add tanh nonlinearity or not
-            if TANH_ACT:
-                content, latent, hidden, log_probs = model(context, hidden, latent, content)
-            else:
-                latent, hidden, log_probs = model(context, hidden, latent)
+            # forward pass
+            latent, hidden, log_probs = model(context, hidden, latent)
 
             # get the loss
             loss = loss_function(log_probs.view(-1, ntokens), target)
@@ -161,7 +156,7 @@ try:
 
         epoch_start_time = time.time()
         train()
-        val_loss = evaluate(model, corpus, loss_function, validation_data, CUDA, BSZ, BPTT, TANH_ACT)
+        val_loss = evaluate(model, corpus, loss_function, validation_data, CUDA, BSZ, BPTT)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
                 'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
