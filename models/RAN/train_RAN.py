@@ -15,19 +15,20 @@ torch.manual_seed(1)
 ########################################################################################################################
 TIE_WEIGHTS = True
 DROPOUT = 0.5
-EMBEDDING_DIM = 50
+EMBEDDING_DIM = 650
 BPTT = 35
 BSZ = 10
-HIDDEN_SIZE = 50
-LR = 0.02
+HIDDEN_SIZE = 650
+LR = 1.5
 CLIP = 0.25
+LAYERS = 2
 ########################################################################################################################
 EPOCHS = 50
 PRINT_EVERY = 500
 CUDA = True
 LOSS_FUNC = "CrossEnt"  # options: CrossEnt or NLLLoss (if using NLLLoss add softmax to forward method before training)
 DATA_FILE = "../../data/penn/"  # options: Penn Treebank or Alphabet
-CONTINUE_TRAINING = True  # use if want to continue training on old pt file
+CONTINUE_TRAINING = False  # use if want to continue training on old pt file
 ########################################################################################################################
 
 # save decoders
@@ -70,7 +71,7 @@ if CONTINUE_TRAINING:
         model = torch.load(f)
 else:
     # initialize model
-    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE, TIE_WEIGHTS, softmax, DROPOUT)
+    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE, TIE_WEIGHTS, softmax, LAYERS, DROPOUT)
 
 if CUDA:
     model.cuda()
@@ -113,7 +114,7 @@ def train():
         if target.size(0) == BSZ * BPTT:
 
             # forward pass
-            latent, hidden, log_probs = model(context, hidden, latent)
+            latent, hidden, log_probs, _, _ = model(context, hidden, latent)
 
             # get the loss
             loss = loss_function(log_probs.view(-1, ntokens), target)
@@ -169,7 +170,8 @@ try:
             best_val_loss = val_loss
         else:
             # Anneal the learning rate if no improvement has been seen in the validation dataset.
-            LR /= 4.0
+            if epoch > 5:
+                LR /= 2.0
 
 except KeyboardInterrupt:
     print('-' * 89)
