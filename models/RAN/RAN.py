@@ -33,7 +33,6 @@ class RAN(nn.Module):
             if self.hidden_size != self.embedding_size:
                 raise ValueError('When using the weight tying, hidden size must be equal to embedding size')
             self.h2o.weight = self.embeddings.weight
-            self.h2o_2.weight = self.embeddings.weight
 
     def forward(self, word, hidden, latent, content=0):
 

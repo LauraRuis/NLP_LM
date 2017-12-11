@@ -47,7 +47,7 @@ def evaluate(model, corpus, criterion, data_source, cuda, bsz, bptt):
     for i in range(0, data_source.size(0) - 1, bptt):
         context, target = get_batch(data_source, i, bptt, evaluation=True)
         if target.size(0) == bsz * bptt:
-            latent, hidden, log_probs = model(context, hidden, latent)
+            latent, hidden, log_probs, _, _ = model(context, hidden, latent)
             output_flat = log_probs.view(-1, ntokens)
             total_loss += len(context) * criterion(output_flat, target).data
             hidden = repackage_hidden(hidden)

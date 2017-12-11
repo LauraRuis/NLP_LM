@@ -71,7 +71,7 @@ if CONTINUE_TRAINING:
         model = torch.load(f)
 else:
     # initialize model
-    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE, TIE_WEIGHTS, softmax, LAYERS, DROPOUT)
+    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE, TIE_WEIGHTS, softmax, DROPOUT)
 
 if CUDA:
     model.cuda()
@@ -106,6 +106,7 @@ def train():
 
         # repackage hidden stop backprop from going to beginning each time
         hidden = repackage_hidden(hidden)
+        latent = repackage_hidden(latent)
 
         # set gradients to zero
         model.zero_grad()
@@ -168,10 +169,10 @@ try:
             with open(NN_FILENAME, 'wb') as f:
                 torch.save(model, f)
             best_val_loss = val_loss
-        else:
-            # Anneal the learning rate if no improvement has been seen in the validation dataset.
-            if epoch > 5:
-                LR /= 2.0
+        
+        # Anneal the learning rate if no improvement has been seen in the validation dataset.
+        if epoch > 5:
+            LR /= 2.0
 
 except KeyboardInterrupt:
     print('-' * 89)
