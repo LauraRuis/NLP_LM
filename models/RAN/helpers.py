@@ -1,4 +1,5 @@
 import torch.autograd as autograd
+import random
 
 
 def batchify(data, bsz, cuda):
@@ -19,6 +20,7 @@ def batchify(data, bsz, cuda):
 
 
 def get_batch(source, i, bptt, evaluation=False):
+
     seq_len = min(bptt, len(source) - 1 - i)
     data = autograd.Variable(source[i:i + seq_len], volatile=evaluation)
     target = autograd.Variable(source[i + 1:i + 1 + seq_len].view(-1))
@@ -42,14 +44,13 @@ def evaluate(model, corpus, criterion, data_source, cuda, bsz, bptt):
     # Turn on evaluation mode which disables dropout.
     total_loss = 0
     ntokens = len(corpus.dictionary)
-    hidden = model.init_states(cuda, bsz)
     latent = model.init_states(cuda, bsz)
     for i in range(0, data_source.size(0) - 1, bptt):
         context, target = get_batch(data_source, i, bptt, evaluation=True)
         if target.size(0) == bsz * bptt:
-            latent, hidden, log_probs, _, _ = model(context, hidden, latent)
+            latent, log_probs, _, _ = model(context, latent)
             output_flat = log_probs.view(-1, ntokens)
             total_loss += len(context) * criterion(output_flat, target).data
-            hidden = repackage_hidden(hidden)
+            latent = repackage_hidden(latent)
 
     return total_loss[0] / len(data_source)

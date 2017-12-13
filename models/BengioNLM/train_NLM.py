@@ -13,7 +13,7 @@ torch.manual_seed(1)
 
 # pars to change
 CONTEXT_SIZE = 3
-CUDA = True
+CUDA = False
 DIRECT_CONNECTIONS = True
 EMBEDDING_DIM = 50
 BATCH_SIZE = 10
@@ -49,13 +49,12 @@ with open(NN_FILENAME, 'rb') as f:
 if CUDA:
     model.cuda()
 
-optimizer = optim.SGD(model.parameters(), lr=LR)
-
 word_to_ix = corpus.dictionary.word_to_ix
 json.dump(corpus.dictionary.ix_to_word, DECODER, indent=4)
 json.dump(word_to_ix, ENCODER, indent=4)
 
-
+print('training data')
+print(training_data[0])
 def train():
 
     total_loss = 0
@@ -69,7 +68,7 @@ def train():
         log_probs = model(context)
         loss = loss_function(log_probs.view(-1, ntokens), target)
         loss.backward()
-
+        optimizer = optim.SGD(model.parameters(), lr=LR, weight_decay=1e-6)
         optimizer.step()
         total_loss += loss.data
 

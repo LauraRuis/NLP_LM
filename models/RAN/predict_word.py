@@ -14,10 +14,9 @@ def predict_word(corpus, model, context, cuda):
 
     word_to_ix = corpus.dictionary.word_to_ix
     context = torch.cuda.LongTensor([word_to_ix[context]])
-    hidden = model.init_states(cuda, 1)
     latent = model.init_states(cuda, 1)
     context = autograd.Variable(context)
-    latent, hidden, log_probs = model(context, hidden, latent)
+    latent, log_probs, _, _ = model(context, latent)
     max = log_probs.view(-1).max()
     idx = 0
     for i, el in enumerate(log_probs.view(-1)):
@@ -28,9 +27,7 @@ def predict_word(corpus, model, context, cuda):
 
 def generate(corpus, cuda, temperature, words, log_interval, bsz):
     ntokens = len(corpus.dictionary)
-    hidden = model.init_states(cuda, bsz)
     latent = model.init_states(cuda, bsz)
-    content = model.init_states(cuda, bsz)
 
     input = autograd.Variable(torch.rand(1, 1).mul(ntokens).long(), volatile=True)
 
@@ -39,7 +36,7 @@ def generate(corpus, cuda, temperature, words, log_interval, bsz):
 
     generated = []
     for i in range(words):
-        latent, hidden, output = model(input, hidden, latent)
+        latent, output, _, _ = model(input, latent)
         word_weights = output.squeeze().data.div(temperature).exp().cpu()
         word_idx = torch.multinomial(word_weights, 1)[0]
         input.data.fill_(word_idx)
@@ -52,24 +49,26 @@ def generate(corpus, cuda, temperature, words, log_interval, bsz):
     print(''.join(generated))
 
 
-def word_dependencies(model, sentence, corpus, cuda):
+def word_dependencies(model, sentence, corpus, norm, cuda):
 
     i_gates = []
     f_gates = []
 
-    hidden = model.init_states(cuda, 1)  # bsz = 1
     latent = model.init_states(cuda, 1)  # bsz = 1
+
+    model.eval()
 
     # first get all input gates and forget gates per word in sentence
     for word in sentence:
         context = autograd.Variable(torch.cuda.LongTensor([corpus.dictionary.word_to_ix[word]]))
         if cuda:
             context.cuda()
-        latent, hidden, log_probs, i_gate, f_gate = model.forward_dependencies(context, hidden, latent)
+        latent, log_probs, i_gate, f_gate = model(context, latent)
         i_gates.append(i_gate.data.cpu().numpy())
         f_gates.append(f_gate.data.cpu().numpy())
 
     important_idxs = []
+
     # loop over words
     for i, word in enumerate(sentence):
 
@@ -88,10 +87,15 @@ def word_dependencies(model, sentence, corpus, cuda):
                     forget_gates = np.multiply(forget_gates, f_gates[h])
 
                 weight = np.multiply(forget_gates, i_gates[j])
-                weights.append(np.sum(weight))
-
+                if norm == "max":
+                    weights.append(np.max(weight))
+                elif norm == "sum":
+                    weights.append(np.sum(weight))
+                # elif norm == "l2":
+                #     weights.append()
             important_word_idx = weights.index(max(weights))
             important_idxs.append(important_word_idx)
+
     print(important_idxs)
 
 
@@ -105,14 +109,15 @@ if __name__ == "__main__":
     DATA_FILE = "../../data/penn/"
     TANH_ACT = False
     BPTT = 35
-    model = torch.load("NNs/hidden_50-embed_50_drop_0.5_tying_True.pt")
+    model_working_weight_analysis = "NNs/hidden_650-embed_650_drop_0.5_layers_2_tying_True.pt"
+    model = torch.load(model_working_weight_analysis)
     loss_function = nn.CrossEntropyLoss()
-    GET_PERPLEXITY = False
+    GET_PERPLEXITY = True
     PREDICT_WORD = False
     context = "he is a"
     GENERATE = True
     number_words = 300
-    temp = 1.0
+    temp = 1
     ####################################################################################################################
 
     # get test data
@@ -134,5 +139,13 @@ if __name__ == "__main__":
     else:
         print("Set either GET_PERPLEXITY, PREDICT_WORD or GENERATE to true")
 
-    test_sentence = "an earthquake struck northern california killing more than people"
-    word_dependencies(model, test_sentence.split(), corpus, True)
+    test_sentence1 = "an earthquake struck northern california killing more than N people"
+    test_sentence2 = "he sits down at the piano and plays"
+    test_sentence3 = "conservative party fails to secure a majority resulting in a hung parliament"
+
+    print(test_sentence1)
+    word_dependencies(model, test_sentence1.split(), corpus, "sum", True)
+    print(test_sentence2)
+    word_dependencies(model, test_sentence2.split(), corpus, "sum", True)
+    print(test_sentence3)
+    word_dependencies(model, test_sentence3.split(), corpus, "sum", True)
