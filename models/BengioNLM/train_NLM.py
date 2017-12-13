@@ -8,18 +8,19 @@ from data import Corpus
 from helpers import *
 import time
 import math
+import os
 
 torch.manual_seed(1)
 
 # pars to change
 CONTEXT_SIZE = 3
-CUDA = True
-DIRECT_CONNECTIONS = True
+CUDA = False
+DIRECT_CONNECTIONS = False
 EMBEDDING_DIM = 50
 BATCH_SIZE = 10
 EPOCHS = 50
 LR = 0.001
-NN_FILENAME = "bengio.pt"
+NN_FILENAME = "bengio_cpu.pt"
 if DIRECT_CONNECTIONS:
     NN_FILENAME = "dc_bengio.pt"
 DECODER = open("decoder.json", "w")
@@ -43,8 +44,9 @@ loss_function = nn.CrossEntropyLoss()
 model = BengioNLM(ntokens, EMBEDDING_DIM, CONTEXT_SIZE, DIRECT_CONNECTIONS)
 
 # Load the best saved model.
-with open(NN_FILENAME, 'rb') as f:
-    model = torch.load(f)
+if os.path.exists(NN_FILENAME):
+    with open(NN_FILENAME, 'rb') as f:
+        model = torch.load(f)
 
 if CUDA:
     model.cuda()
@@ -62,7 +64,8 @@ def train():
     start_time = time.time()
 
     for batch, training_tuple in enumerate(training_data):
-        context = autograd.Variable(training_tuple[0]).view(BATCH_SIZE, CONTEXT_SIZE)
+        context = autograd.Variable(training_tuple[0]).view(
+            BATCH_SIZE, CONTEXT_SIZE)
         target = autograd.Variable(training_tuple[1])
 
         model.zero_grad()
@@ -93,8 +96,8 @@ try:
         val_loss = evaluate(model, corpus, loss_function, val_data)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
-                'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
-                                           val_loss, math.exp(val_loss)))
+              'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
+                                         val_loss, math.exp(val_loss)))
         print('-' * 89)
         # Save the model if the validation loss is the best we've seen so far.
         if not best_val_loss or val_loss < best_val_loss:
@@ -102,7 +105,8 @@ try:
                 torch.save(model, f)
             best_val_loss = val_loss
         else:
-            # Anneal the learning rate if no improvement has been seen in the validation dataset.
+            # Anneal the learning rate if no improvement has been seen in the
+            # validation dataset.
             LR /= 4.0
 
 except KeyboardInterrupt:
