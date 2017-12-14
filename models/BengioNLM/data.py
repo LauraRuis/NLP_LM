@@ -35,7 +35,7 @@ class Corpus(object):
         with open(path, 'r', encoding="utf-8") as f:
             tokens = 0
             for line in f:
-                words = ["*PAD*", "*PAD*"] + line.split() + ['<eos>']
+                words = ["*PAD*" * n] + line.split() + ['<eos>']
                 tokens += len(words)
                 for word in words:
                     self.dictionary.add_word(word)
@@ -44,7 +44,7 @@ class Corpus(object):
         with open(path, 'r', encoding="utf-8") as f:
             ngrams = []
             for sentence in f.read().split("\n"):
-                sentence = ["*PAD*", "*PAD*"] + sentence.split() + ["<eos>"]
+                sentence = ["*PAD*" * n] + sentence.split() + ["<eos>"]
                 for i, word in enumerate(sentence):
                     if i > n - 2:
                         # print("target: ", sentence[i])
