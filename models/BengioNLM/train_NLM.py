@@ -21,13 +21,13 @@ DIRECT_CONNECTIONS = False
 EMBEDDING_DIM = 50
 BATCH_SIZE = 10
 EPOCHS = 50
-LR = 0.001
+LR = 2
 NN_FILENAME = "bengio_czech.pt"
 if DIRECT_CONNECTIONS:
     NN_FILENAME = "dc_bengio.pt"
 DECODER = open("decoder.json", "w")
 ENCODER = open("encoder.json", "w")
-print_every = 5000
+print_every = 1000
 data_path = "../../data/czech/"
 
 if CUDA:
@@ -63,12 +63,12 @@ json.dump(word_to_ix, ENCODER, indent=4)
 def train(current_epoch):
     total_loss = 0
     start_time = time.time()
-
+    # print(len(training_data))
     random.seed(current_epoch)
     random_indices = [batch for batch, i in enumerate(training_data)]
     random.shuffle(random_indices)
     # i = 0
-
+    # print(random_indices)
     for i, k in enumerate(random_indices):
         # print("batch number: ", i)
         # print("random index: ", k)
@@ -79,24 +79,24 @@ def train(current_epoch):
         training_tuple_0 = training_tuple[0].contiguous()
         context = autograd.Variable(training_tuple_0).view(
             BATCH_SIZE, CONTEXT_SIZE)
-    target = autograd.Variable(training_tuple[1])
+        target = autograd.Variable(training_tuple[1])
 
-    model.zero_grad()
-    log_probs = model(context)
-    loss = loss_function(log_probs.view(-1, ntokens), target)
-    loss.backward()
+        model.zero_grad()
+        log_probs = model(context)
+        loss = loss_function(log_probs.view(-1, ntokens), target)
+        loss.backward()
 
-    optimizer.step()
-    total_loss += loss.data
+        optimizer.step()
+        total_loss += loss.data
 
-    if i % print_every == 0 and i > 0:
-        cur_loss = total_loss[0] / print_every
-        elapsed = time.time() - start_time
-        print('| epoch {:3d} | {:6d}/{:6d} batches | lr {:02.3f} | ms/batch {:5.2f} | loss {:5.3f} | ppl {:8.2f}'
-              .format(epoch, i, len(training_data), LR,
-                      elapsed * 1000 / print_every, cur_loss, math.exp(cur_loss)))
-        total_loss = 0
-        start_time = time.time()
+        if i % print_every == 0 and i > 0:
+            cur_loss = total_loss[0] / print_every
+            elapsed = time.time() - start_time
+            print('| epoch {:3d} | {:6d}/{:6d} batches | lr {:02.3f} | ms/batch {:5.2f} | loss {:5.3f} | ppl {:8.2f}'
+                  .format(epoch, i, len(training_data), LR,
+                          elapsed * 1000 / print_every, cur_loss, math.exp(cur_loss)))
+            total_loss = 0
+            start_time = time.time()
     # i += 1
 
 best_val_loss = None
