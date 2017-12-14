@@ -39,7 +39,7 @@ def generate(corpus, cuda, temperature, words, log_interval, bsz):
 
     generated = []
     for i in range(words):
-        latent, hidden, output = model(input, hidden, latent)
+        latent, hidden, output, _, _ = model(input, hidden, latent)
         word_weights = output.squeeze().data.div(temperature).exp().cpu()
         word_idx = torch.multinomial(word_weights, 1)[0]
         input.data.fill_(word_idx)
@@ -60,16 +60,19 @@ def word_dependencies(model, sentence, corpus, cuda):
     hidden = model.init_states(cuda, 1)  # bsz = 1
     latent = model.init_states(cuda, 1)  # bsz = 1
 
+    model.eval()
+
     # first get all input gates and forget gates per word in sentence
     for word in sentence:
-        context = autograd.Variable(torch.cuda.LongTensor([corpus.dictionary.word_to_ix[word]]))
+        context = autograd.Variable(torch.LongTensor([corpus.dictionary.word_to_ix[word]]))
         if cuda:
             context.cuda()
-        latent, hidden, log_probs, i_gate, f_gate = model.forward_dependencies(context, hidden, latent)
+        latent, hidden, log_probs, i_gate, f_gate = model(context, hidden, latent)
         i_gates.append(i_gate.data.cpu().numpy())
         f_gates.append(f_gate.data.cpu().numpy())
 
     important_idxs = []
+    range_words = []
     # loop over words
     for i, word in enumerate(sentence):
 
@@ -89,10 +92,15 @@ def word_dependencies(model, sentence, corpus, cuda):
 
                 weight = np.multiply(forget_gates, i_gates[j])
                 weights.append(np.sum(weight))
+            # print(weights)
 
             important_word_idx = weights.index(max(weights))
             important_idxs.append(important_word_idx)
-    print(important_idxs)
+            distance_between = i - important_word_idx
+            range_words.append(distance_between)
+    print("index of most important words: ", important_idxs)
+    print("range words: ", range_words)
+    print("mean range words: ", np.mean(range_words))
 
 
 if __name__ == "__main__":
@@ -101,17 +109,18 @@ if __name__ == "__main__":
     # parameters to change
     ####################################################################################################################
     BSZ = 20
-    CUDA = True
+    CUDA = False
     DATA_FILE = "../../data/penn/"
     TANH_ACT = False
     BPTT = 35
-    model = torch.load("NNs/hidden_50-embed_50_drop_0.5_tying_True.pt")
+    # model = torch.load("NNs/hidden_50-embed_50_drop_0.5_tying_True.pt")
+    model = torch.load('NNs/hidden_650-embed_650_drop_0.5_layers_2_tying_True.pt', map_location=lambda storage, loc: storage)
     loss_function = nn.CrossEntropyLoss()
     GET_PERPLEXITY = False
     PREDICT_WORD = False
     context = "he is a"
     GENERATE = True
-    number_words = 300
+    number_words = 50
     temp = 1.0
     ####################################################################################################################
 
@@ -134,5 +143,6 @@ if __name__ == "__main__":
     else:
         print("Set either GET_PERPLEXITY, PREDICT_WORD or GENERATE to true")
 
-    test_sentence = "an earthquake struck northern california killing more than people"
-    word_dependencies(model, test_sentence.split(), corpus, True)
+    test_sentence = "an earthquake struck northern california killing more than N people"
+    print("\nTest sentence: ", test_sentence)
+    word_dependencies(model, test_sentence.split(), corpus, CUDA)
