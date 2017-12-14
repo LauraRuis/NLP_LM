@@ -20,13 +20,13 @@ EMBEDDING_DIM = 50
 BATCH_SIZE = 10
 EPOCHS = 50
 LR = 0.001
-NN_FILENAME = "bengio_cpu.pt"
+NN_FILENAME = "bengio_czech.pt"
 if DIRECT_CONNECTIONS:
     NN_FILENAME = "dc_bengio.pt"
 DECODER = open("decoder.json", "w")
 ENCODER = open("encoder.json", "w")
 print_every = 5000
-data_path = "../../data/penn/"
+data_path = "../../data/czech/"
 
 if CUDA:
     torch.cuda.manual_seed(1)
@@ -55,8 +55,8 @@ word_to_ix = corpus.dictionary.word_to_ix
 json.dump(corpus.dictionary.ix_to_word, DECODER, indent=4)
 json.dump(word_to_ix, ENCODER, indent=4)
 
-print('training data')
-print(training_data[0])
+# print('training data')
+# print(training_data[0])
 
 
 def train():
@@ -65,7 +65,7 @@ def train():
     start_time = time.time()
 
     for batch, training_tuple in enumerate(training_data):
-        context = autograd.Variable(training_tuple[0]).view(
+        context = autograd.Variable(training_tuple[0].contiguous()).view(
             BATCH_SIZE, CONTEXT_SIZE)
         target = autograd.Variable(training_tuple[1])
 

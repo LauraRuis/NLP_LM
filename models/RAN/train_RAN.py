@@ -11,9 +11,9 @@ import random
 # set seed
 torch.manual_seed(1)
 
-########################################################################################################################
+##########################################################################
 # adjustable parameters
-########################################################################################################################
+##########################################################################
 TIE_WEIGHTS = True
 DROPOUT = 0.5
 EMBEDDING_DIM = 650
@@ -24,21 +24,23 @@ HIDDEN_SIZE = 650
 LR = 1.5
 CLIP = 0.4
 LAYERS = 2
-########################################################################################################################
+##########################################################################
 EPOCHS = 150
 PRINT_EVERY = 500
-CUDA = True
-LOSS_FUNC = "CrossEnt"  # options: CrossEnt or NLLLoss (if using NLLLoss add softmax to forward method before training)
-DATA_FILE = "../../data/penn/"  # options: Penn Treebank or Alphabet
-CONTINUE_TRAINING = True  # use if want to continue training on old pt file
-########################################################################################################################
+CUDA = False
+# options: CrossEnt or NLLLoss (if using NLLLoss add softmax to forward
+# method before training)
+LOSS_FUNC = "CrossEnt"
+DATA_FILE = "../../data/czech/"  # options: Penn Treebank or Alphabet
+CONTINUE_TRAINING = False  # use if want to continue training on old pt file
+##########################################################################
 
 # save decoders
 DECODER = open("decoder.json", "w")
 ENCODER = open("encoder.json", "w")
 
 # set filename for saving parameters
-NN_FILENAME = \
+NN_FILENAME = 'czech' +\
     "NNs/hidden_" + str(HIDDEN_SIZE) + \
     "-embed_" + str(EMBEDDING_DIM) + \
     "_drop_" + str(DROPOUT) + \
@@ -74,7 +76,8 @@ if CONTINUE_TRAINING:
         model = torch.load(f)
 else:
     # initialize model
-    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE, TIE_WEIGHTS, softmax, LAYERS, DROPOUT)
+    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE,
+                TIE_WEIGHTS, softmax, LAYERS, DROPOUT)
 
 if CUDA:
     model.cuda()
@@ -102,7 +105,8 @@ def train(current_epoch):
     latent = model.init_states(CUDA, BSZ)
 
     # shuffle indices to loop through data in random order
-    random_indices = [i for batch, i in enumerate(range(0, training_data.size(0) - 1, BPTT))]
+    random_indices = [i for batch, i in enumerate(
+        range(0, training_data.size(0) - 1, BPTT))]
     random.seed(current_epoch)
     random.shuffle(random_indices)
 
@@ -112,7 +116,7 @@ def train(current_epoch):
         # get batch of training data
         context, target = get_batch(training_data, random_indices[batch], BPTT)
 
-        ################################################################################################################
+        #######################################################################
         # code for testing if sequence still correct
         #
         # print([corpus.dictionary.ix_to_word[idx] for idx in target.data])
@@ -122,7 +126,7 @@ def train(current_epoch):
         #     print([j * BPTT + i for j in range(BSZ)])
         # print([corpus.dictionary.ix_to_word[idx] for idx in context.data])
         # print([corpus.dictionary.ix_to_word[idx] for idx in target.data])
-        ################################################################################################################
+        #######################################################################
 
         # repackage hidden stop backprop from going to beginning each time
         hidden = repackage_hidden(hidden)
@@ -162,8 +166,8 @@ def train(current_epoch):
                 elapsed = time.time() - start_time
                 print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
                       'loss {:5.2f} | ppl {:8.2f}'.format(
-                    epoch, batch, len(training_data) // BPTT, LR,
-                                  elapsed * 1000 / PRINT_EVERY, cur_loss, math.exp(cur_loss)))
+                          epoch, batch, len(training_data) // BPTT, LR,
+                          elapsed * 1000 / PRINT_EVERY, cur_loss, math.exp(cur_loss)))
                 total_loss = 0
                 start_time = time.time()
 
@@ -179,11 +183,12 @@ try:
 
         epoch_start_time = time.time()
         train(epoch)
-        val_loss = evaluate(model, corpus, loss_function, validation_data, CUDA, EVAL_BSZ, BPTT)
+        val_loss = evaluate(model, corpus, loss_function,
+                            validation_data, CUDA, EVAL_BSZ, BPTT)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
-                'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
-                                           val_loss, math.exp(val_loss)))
+              'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
+                                         val_loss, math.exp(val_loss)))
         print('-' * 89)
         # Save the model if the validation loss is the best we've seen so far.
         if not best_val_loss or val_loss < best_val_loss:
@@ -191,7 +196,8 @@ try:
                 torch.save(model, f)
             best_val_loss = val_loss
 
-        # Anneal the learning rate if no improvement has been seen in the validation data set.
+        # Anneal the learning rate if no improvement has been seen in the
+        # validation data set.
         if epoch > 6:
             LR /= 1.2
 
