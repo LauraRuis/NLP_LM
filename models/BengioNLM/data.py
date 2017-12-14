@@ -28,12 +28,11 @@ class Corpus(object):
         self.test = self.tokenize(os.path.join(path, 'test.txt'), self.ary)
 
     def tokenize(self, path, n):
-
         """Tokenizes a text file."""
         assert os.path.exists(path)
 
         # Add words to the dictionary
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding="utf-8") as f:
             tokens = 0
             for line in f:
                 words = ["*PAD*", "*PAD*"] + line.split() + ['<eos>']
@@ -42,7 +41,7 @@ class Corpus(object):
                     self.dictionary.add_word(word)
 
         # Tokenize file content
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding="utf-8") as f:
             ngrams = []
             for sentence in f.read().split("\n"):
                 sentence = ["*PAD*", "*PAD*"] + sentence.split() + ["<eos>"]
@@ -52,8 +51,10 @@ class Corpus(object):
                         # print("target_tensor", torch.LongTensor([self.dictionary.word_to_ix[sentence[i]]]))
                         # print("context: ", sentence[i - n + 1])
                         # print("context_tensor", torch.LongTensor([self.dictionary.word_to_ix[word] for word in sentence[i - n + 1:i]]))
-                        target = torch.LongTensor([self.dictionary.word_to_ix[sentence[i]]])
-                        context = torch.LongTensor([self.dictionary.word_to_ix[word] for word in sentence[i - n + 1:i]])
+                        target = torch.LongTensor(
+                            [self.dictionary.word_to_ix[sentence[i]]])
+                        context = torch.LongTensor(
+                            [self.dictionary.word_to_ix[word] for word in sentence[i - n + 1:i]])
                         ngrams.append((context, target))
 
         return ngrams
