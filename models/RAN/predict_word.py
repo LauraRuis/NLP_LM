@@ -51,52 +51,55 @@ def generate(corpus, cuda, temperature, words, log_interval, bsz):
 
 def word_dependencies(model, sentence, corpus, norm, cuda):
 
-    i_gates = []
-    f_gates = []
-
+    hidden = model.init_states(cuda, 1)  # bsz = 1
     latent = model.init_states(cuda, 1)  # bsz = 1
 
     model.eval()
 
-    # first get all input gates and forget gates per word in sentence
-    for word in sentence:
-        context = autograd.Variable(torch.cuda.LongTensor([corpus.dictionary.word_to_ix[word]]))
-        if cuda:
-            context.cuda()
-        latent, log_probs, i_gate, f_gate = model(context, latent)
-        i_gates.append(i_gate.data.cpu().numpy())
-        f_gates.append(f_gate.data.cpu().numpy())
+    context_tensor = torch.LongTensor([corpus.dictionary.word_to_ix[word] for word in sentence])
 
-    important_idxs = []
+    if cuda:
+        context_tensor.cuda()
+
+    context = autograd.Variable(context_tensor)
+
+    hidden, latent, log_probs, i_gates, f_gates = model(context, hidden, latent, weight_analysis=True)
+
+    important_idx_layers = []
 
     # loop over words
-    for i, word in enumerate(sentence):
+    for layer in range(model.nlayers):
+        important_idxs = []
+        for i, word in enumerate(sentence):
 
-        # if word has a history
-        if i > 0:
+            # if word has a history
+            if i > 0:
 
-            # list to save weights of words in history
-            weights = []
+                # list to save weights of words in history
+                weights = []
 
-            # loop over its history
-            for j in range(i):
+                # loop over its history
+                for j in range(i):
 
-                # multiply all subsequent forget gates
-                forget_gates = f_gates[j + 1]
-                for h in range(j + 2, i + 1):
-                    forget_gates = np.multiply(forget_gates, f_gates[h])
+                    # multiply all subsequent forget gates
+                    forget_gates = f_gates[layer][j + 1].contiguous()
+                    for h in range(j + 2, i + 1):
+                        forget_gates = np.multiply(forget_gates, f_gates[layer][h].contiguous())
 
-                weight = np.multiply(forget_gates, i_gates[j])
-                if norm == "max":
-                    weights.append(np.max(weight))
-                elif norm == "sum":
-                    weights.append(np.sum(weight))
-                # elif norm == "l2":
-                #     weights.append()
-            important_word_idx = weights.index(max(weights))
-            important_idxs.append(important_word_idx)
+                    weight = np.multiply(forget_gates, i_gates[layer][j].contiguous())
 
-    print(important_idxs)
+                    if norm == "max":
+                        weights.append(np.max(weight))
+                    elif norm == "sum":
+                        weights.append(np.sum(weight))
+                    # elif norm == "l2":
+                    #     weights.append()
+                weights = [w.data.numpy()[0] for w in weights]
+
+                important_word_idx = weights.index(np.max(weights))
+                important_idxs.append(important_word_idx)
+        important_idx_layers.append(important_idxs)
+        print('layer ' + str(layer) + ': ', important_idxs)
 
 
 if __name__ == "__main__":
@@ -105,17 +108,17 @@ if __name__ == "__main__":
     # parameters to change
     ####################################################################################################################
     BSZ = 20
-    CUDA = True
+    CUDA = False
     DATA_FILE = "../../data/penn/"
     TANH_ACT = False
     BPTT = 35
-    model_working_weight_analysis = "NNs/hidden_650-embed_650_drop_0.5_layers_2_tying_True.pt"
-    model = torch.load(model_working_weight_analysis)
+    model_working_weight_analysis = "NNs/hidden_650-embed_650_drop_0.5_layers_1_tying_True.pt"
+    model = torch.load(model_working_weight_analysis, map_location=lambda storage, loc: storage)
     loss_function = nn.CrossEntropyLoss()
     GET_PERPLEXITY = True
     PREDICT_WORD = False
     context = "he is a"
-    GENERATE = True
+    GENERATE = False
     number_words = 300
     temp = 1
     ####################################################################################################################
@@ -144,8 +147,8 @@ if __name__ == "__main__":
     test_sentence3 = "conservative party fails to secure a majority resulting in a hung parliament"
 
     print(test_sentence1)
-    word_dependencies(model, test_sentence1.split(), corpus, "sum", True)
+    word_dependencies(model, test_sentence1.split(), corpus, "sum", CUDA)
     print(test_sentence2)
-    word_dependencies(model, test_sentence2.split(), corpus, "sum", True)
+    word_dependencies(model, test_sentence2.split(), corpus, "sum", CUDA)
     print(test_sentence3)
-    word_dependencies(model, test_sentence3.split(), corpus, "sum", True)
+    word_dependencies(model, test_sentence3.split(), corpus, "sum", CUDA)

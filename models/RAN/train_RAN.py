@@ -7,9 +7,10 @@ import time
 import torch
 import math
 import random
+import numpy as np
 
 # set seed
-torch.manual_seed(1)
+torch.manual_seed(1111)
 
 ########################################################################################################################
 # adjustable parameters
@@ -18,19 +19,18 @@ TIE_WEIGHTS = True
 DROPOUT = 0.5
 EMBEDDING_DIM = 650
 BPTT = 35
-BSZ = 20
+BSZ = 40
 EVAL_BSZ = 10
 HIDDEN_SIZE = 650
-LR = 1.5
-CLIP = 0.4
+LR = 20
+CLIP = 0.25
 LAYERS = 2
 ########################################################################################################################
 EPOCHS = 150
-PRINT_EVERY = 500
+PRINT_EVERY = 200
 CUDA = True
-LOSS_FUNC = "CrossEnt"  # options: CrossEnt or NLLLoss (if using NLLLoss add softmax to forward method before training)
 DATA_FILE = "../../data/penn/"  # options: Penn Treebank or Alphabet
-CONTINUE_TRAINING = True  # use if want to continue training on old pt file
+CONTINUE_TRAINING = False  # use if want to continue training on old pt file
 ########################################################################################################################
 
 # save decoders
@@ -58,15 +58,7 @@ training_data = batchify(corpus.train, BSZ, CUDA)
 validation_data = batchify(corpus.valid, EVAL_BSZ, CUDA)
 
 # set loss function
-if LOSS_FUNC == "CrossEnt":
-    loss_function = nn.CrossEntropyLoss()
-    softmax = False
-elif LOSS_FUNC == "NLLLoss":
-    loss_function = nn.NLLLoss()
-    softmax = True
-else:
-    loss_function = nn.CrossEntropyLoss()
-    softmax = False
+loss_function = nn.CrossEntropyLoss()
 
 # Load the best saved model or initialize new one
 if CONTINUE_TRAINING:
@@ -74,13 +66,11 @@ if CONTINUE_TRAINING:
         model = torch.load(f)
 else:
     # initialize model
-    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE, TIE_WEIGHTS, softmax, LAYERS, DROPOUT)
+    model = RAN(EMBEDDING_DIM, vocab_size, HIDDEN_SIZE, TIE_WEIGHTS, LAYERS, DROPOUT, CUDA)
 
 if CUDA:
     model.cuda()
-    torch.cuda.manual_seed(1)
-
-# optimizer = optim.SGD(model.parameters(), lr=LR)
+    torch.cuda.manual_seed(1111)
 
 # save encoder en decoder to json file
 json.dump(corpus.dictionary.ix_to_word, DECODER, indent=4)
@@ -106,23 +96,18 @@ def train(current_epoch):
     random.seed(current_epoch)
     random.shuffle(random_indices)
 
+    # max and min weights
+    i_min = None
+    i_max = None
+    linear_min = None
+    linear_max = None
+
     # loop over all data
     for batch, i in enumerate(range(0, training_data.size(0) - 1, BPTT)):
 
         # get batch of training data
-        context, target = get_batch(training_data, random_indices[batch], BPTT)
-
-        ################################################################################################################
-        # code for testing if sequence still correct
-        #
-        # print([corpus.dictionary.ix_to_word[idx] for idx in target.data])
-        # for i, batch in enumerate(context.data):
-        #     print([corpus.dictionary.ix_to_word[idx] for idx in batch])
-        #     print([corpus.dictionary.ix_to_word[target.data[i * BSZ + j]] for j in range(BPTT)])
-        #     print([j * BPTT + i for j in range(BSZ)])
-        # print([corpus.dictionary.ix_to_word[idx] for idx in context.data])
-        # print([corpus.dictionary.ix_to_word[idx] for idx in target.data])
-        ################################################################################################################
+        # context, target = get_batch(training_data, random_indices[batch], BPTT)
+        context, target = get_batch(training_data, i, BPTT)
 
         # repackage hidden stop backprop from going to beginning each time
         hidden = repackage_hidden(hidden)
@@ -132,40 +117,57 @@ def train(current_epoch):
         model.zero_grad()
 
         # only use batch if dimensions are correct
-        if target.size(0) == BSZ * BPTT:
+        # if target.size(0) == BSZ * BPTT:
 
-            # forward pass
-            latent, log_probs, _, _ = model(context, latent)
+        # forward pass
+        hidden, latent, log_probs, _, _ = model(context, hidden, latent)
 
-            # get the loss
-            loss = loss_function(log_probs.view(-1, ntokens), target)
+        # check for vanishing or exploding gradient
+        # lin_weights = model.x2c.weight.data.cpu().numpy()
+        # min_lin = np.min(lin_weights)
+        # max_lin = np.max(lin_weights)
+        # if not linear_min or min_lin < linear_min:
+        #     linear_min = min_lin
+        # if not linear_max or max_lin > linear_max:
+        #     linear_max = max_lin
+        #
+        # i_weights = i.data.cpu().numpy()
+        # min_i_gate = np.min(i_weights)
+        # max_i_gate = np.max(i_weights)
+        # if not i_min or min_i_gate < i_min:
+        #     i_min = min_i_gate
+        # if not i_max or max_i_gate > i_max:
+        #     i_max = max_i_gate
 
-            # back propagate
-            loss.backward()
+        # get the loss
+        loss = loss_function(log_probs.view(-1, ntokens), target)
 
-            # clip gradients to get rid of exploding gradients problem
-            if CLIP > 0:
-                torch.nn.utils.clip_grad_norm(model.parameters(), CLIP)
+        # back propagate
+        loss.backward()
 
-            # update parameters
-            optimizer = optim.SGD(model.parameters(), lr=LR, weight_decay=1e-6)
-            optimizer.step()
-            # for p in model.parameters():
-            #     p.data.add_(-LR, p.grad.data)
+        # clip gradients to get rid of exploding gradients problem
+        if CLIP > 0:
+            torch.nn.utils.clip_grad_norm(model.parameters(), CLIP)
 
-            # update total loss
-            total_loss += loss.data
+        # update parameters
+        # optimizer = optim.SGD(model.parameters(), lr=LR, weight_decay=1e-6)
+        # optimizer.step()
+        for p in model.parameters():
+            p.data.add_(-LR, p.grad.data)
 
-            # print progress
-            if batch % PRINT_EVERY == 0 and batch > 0:
-                cur_loss = total_loss[0] / PRINT_EVERY
-                elapsed = time.time() - start_time
-                print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
-                      'loss {:5.2f} | ppl {:8.2f}'.format(
-                    epoch, batch, len(training_data) // BPTT, LR,
-                                  elapsed * 1000 / PRINT_EVERY, cur_loss, math.exp(cur_loss)))
-                total_loss = 0
-                start_time = time.time()
+        # update total loss
+        total_loss += loss.data
+
+        # print progress
+        if batch % PRINT_EVERY == 0 and batch > 0:
+            cur_loss = total_loss[0] / PRINT_EVERY
+            elapsed = time.time() - start_time
+            print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
+                  'loss {:5.2f} | ppl {:8.2f}'.format(
+                epoch, batch, len(training_data) // BPTT, LR,
+                              elapsed * 1000 / PRINT_EVERY, cur_loss, math.exp(cur_loss)))
+            total_loss = 0
+            start_time = time.time()
 
 
 # initialize best validation loss
@@ -190,10 +192,10 @@ try:
             with open(NN_FILENAME, 'wb') as f:
                 torch.save(model, f)
             best_val_loss = val_loss
-
         # Anneal the learning rate if no improvement has been seen in the validation data set.
-        if epoch > 6:
-            LR /= 1.2
+        else:
+            LR /= 4
+
 
 except KeyboardInterrupt:
     print('-' * 89)
