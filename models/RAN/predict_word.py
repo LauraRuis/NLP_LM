@@ -88,19 +88,27 @@ def prepareModelAnalysys(model, corpus, sentence, cuda):
     return input_w_layers, forget_w_layers
 
 
-def visualize(display, words, indexes, filename):
+def visualize(display, words, arcs, filename):
     with open(filename, 'w') as f:
-        arcs = []
-        for i, index in enumerate(indexes):
-            # if i != index:
-            arcs.append((i+1, index))
+        # arcs = []
+        # for i, arc in enumerate(arcs):
+        #     # if i != index:
+        #     arcs.append((i+1, index))
         f.write(display.render(displacy.parseWordsArcs(words, arcs)))
 
 
 def analysisArcLength(datafile, model_name, model, corpus, norm, cuda, limit_sentences):
     print("***********"+datafile+'****************')
-    maxarc_lengths = defaultdict(list)
-    medianarc_lengths = defaultdict(list)
+    layers_maxarc = []
+    layers_avgarc = []
+    layer_max_lengths_med = []
+    layer_med_lengths_med = []
+    for i in range(model.nlayers):
+        layers_maxarc.append(defaultdict(list))
+        layers_avgarc.append(defaultdict(list))
+        layer_max_lengths_med.append(defaultdict(float))
+        layer_med_lengths_med.append(defaultdict(float))
+
     with open(datafile+'/test.txt', 'r') as f:
         for i, line in enumerate(f):
             stripped = line.strip()
@@ -115,33 +123,37 @@ def analysisArcLength(datafile, model_name, model, corpus, norm, cuda, limit_sen
             arc_lengths_layer = word_dependencies(model, corpus, words, norm,
                                                   norm+'_'+datafile[-5:-1]+'_'+model_name+'.svg', cuda, False)
             # print(len(words), arc_lengths_layer)
-            maxarc_lengths[str(len(words))].append(max(arc_lengths_layer[-1]))
-            medianarc_lengths[str(len(words))].append(
-                np.median(arc_lengths_layer[-1]))
+            for layer_id in range(model.nlayers):
 
-    max_lengths_med = {}
-    for key, items in maxarc_lengths.items():
-        max_lengths_med[key] = np.median(items)
+                layers_maxarc[layer_id][str(len(words))].append(
+                    max(arc_lengths_layer[layer_id]))
 
-    med_lengths_med = {}
-    for key, items in medianarc_lengths.items():
-        med_lengths_med[key] = np.median(items)
+                layers_avgarc[layer_id][str(len(words))].append(
+                    np.average(arc_lengths_layer[layer_id]))
+    # print(layers_avgarc)
+    for i in range(model.nlayers):
+        for key, items in layer_max_lengths_med[i].items():
+            layer_max_lengths_med[i][key] = np.median(items)
 
-    return max_lengths_med, med_lengths_med, maxarc_lengths, medianarc_lengths
+        for key, items in layer_med_lengths_med[i].items():
+            layer_med_lengths_med[i][key] = np.median(items)
+
+    return layer_max_lengths_med, layer_med_lengths_med, layers_maxarc, layers_avgarc
 
 
-def word_dependencies(model, corpus, sentence, norm, filename, cuda=None, visualize=False):
+def word_dependencies(model, corpus, sentence, norm, filename, cuda=None,
+                      viz=False, colors=['#000000', '#f4425f']):
 
     input_w_layers, forget_w_layers = prepareModelAnalysys(
         model, corpus, sentence, cuda)
-    important_idx_layers = []
+    arcs_per_layers = []
 
     display = displacy.Displacy({'wordDistance': 130, 'arcDistance': 40,
                                  'wordSpacing': 30, 'arrowSpacing': 10})
 
     # loop over words
     for layer in range(model.nlayers):
-        important_idxs = []
+        arcs = []
         for i, word in enumerate(sentence):
 
             # if word has a history
@@ -166,21 +178,29 @@ def word_dependencies(model, corpus, sentence, norm, filename, cuda=None, visual
                     elif norm == "sum":
                         weights.append(np.sum(weight))
                     elif norm == "l2":
-                        weights.append(np.sum(np.power(weights, 2)))
+                        weights.append(np.sum(np.power(weight, 2)))
 
                 # if norm == "l2":
                     # weights = [w for w in weights]
-
-                important_word_idx = weights.index(np.max(weights))
-                important_idxs.append(important_word_idx)
-        important_idx_layers.append(important_idxs)
+                for k in range(len(colors)):
+                    index = weights.index(np.max(weights))
+                    weights[index] = 0
+                    arcs.append((i, index, colors[k]))
+                    if i <= len(colors)-1:
+                        break
+        arcs_per_layers.append(arcs)
         # print('layer ' + str(layer) + ': ', important_idxs)
-        if visualize:
-            visualize(display, sentence, important_idxs, str(layer)+filename)
-
-        arc_lengths_layer = [
-            [i+1 - index for i, index in enumerate(lay)] for lay in important_idx_layers]
-        return arc_lengths_layer
+        if viz:
+            visualize(display, sentence, arcs, str(layer)+filename)
+    # print(arcs_per_layers)
+    arc_lengths_layer = []
+    for layer_arcs in arcs_per_layers:
+        layer = []
+        for arc in layer_arcs:
+            if arc[2] == colors[0]:
+                layer.append(arc[0]-arc[1])
+        arc_lengths_layer.append(layer)
+    return arc_lengths_layer
 
 
 def save_obj(obj, name):
@@ -251,16 +271,16 @@ if __name__ == "__main__":
     # test_sentence3 = "conservative party fails to secure a majority resulting in a hung parliament"
     # print(test_sentence1)
     # word_dependencies(model, corpus, test_sentence1.split(),
-    #                   "sum", "f1.svg", CUDA)
+    #                   "sum", args.name+"f1.svg", CUDA, True)
     # print(test_sentence2)
     # word_dependencies(model, corpus, test_sentence2.split(),
-    #                   "sum", "f2.svg", CUDA)
+    #                   "sum", args.name+"f2.svg", CUDA, True)
     # print(test_sentence3)
     # word_dependencies(model, corpus, test_sentence3.split(),
-    #                   "sum", "f3.svg", CUDA)
+    #                   "sum", args.name+"f3.svg", CUDA, True)
 
     max_lengths_med, med_lengths_med, maxarc_lengths, medianarc_lengths = analysisArcLength(args.datafile, args.name,
-                                                                                            model, corpus, args.norm, CUDA, 10000)
+                                                                                            model, corpus, args.norm, CUDA, 1000000)
 
     filebase = args.norm+'_'+args.datafile[-5:-1]+'_'+args.name
     save_obj(max_lengths_med, 'max_l_med_'+filebase)

@@ -34,7 +34,8 @@ def parseWordsArcs(words, arcs):
         a = {'start': arc[0],
              'end': arc[1],
              'label': '',
-             'dir': 'left'}
+             'dir': 'left',
+             'color': arc[2]}
         if arc[0] < arc[1]:
             a['dir'] = 'right'
         elif arc[0] > arc[1]:
@@ -218,6 +219,7 @@ class Displacy:
         data = arc.get('data', [])
         index = arc.get('index')
         tag_index = arc.get('tag_index')
+        color = arc.get('color')
 
         start_x = self.offset_x + start * self.word_distance + \
             self.arrow_spacing * (self.highest_level - level) / 4
@@ -250,7 +252,7 @@ class Displacy:
                         )],
                         ['stroke-width', str(self.arrow_stroke) + 'px'],
                         ['fill', 'none'],
-                        ['stroke', 'currentColor'],
+                        ['stroke', color],
                         ['data-dir', direction],
                         ['data-label', label]
                     ]
@@ -265,7 +267,7 @@ class Displacy:
                             'classnames': ['displacy-label'],
                             'attributes': [
                                 ['startOffset', '50%'],
-                                ['fill', 'currentColor'],
+                                ['fill', color],
                                 ['text-anchor', 'middle'],
                                 ['data-label', label],
                                 ['data-dir', direction]
@@ -283,7 +285,7 @@ class Displacy:
                             aw2, start_y - self.arrow_width,
                             start_x + aw2 if direction == 'left' else endpoint - aw2, start_y - self.arrow_width
                         )],
-                        ['fill', 'currentColor'],
+                        ['fill', color],
                         ['data-label', label],
                         ['data-dir', direction]
                     ]
