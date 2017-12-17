@@ -72,11 +72,11 @@ def grouped_barchart(data1, data2, data3):
             label='l2')
 
     # Set the y axis label
-    ax.set_ylabel('Dependency Lengths')
-    ax.set_xlabel('Sentence Lengths')
+    ax.set_ylabel('Dependency Length')
+    ax.set_xlabel('Sentence Length')
 
     # Set the chart's title
-    ax.set_title('Median Dependency Length per Different Sentence Length of One Layer RAN')
+    ax.set_title('Median of Average Dependency Length per Sentence Length\nOne Layer Simplified LSTM - Forget Gates')
 
     # Set the position of the x ticks
     ax.set_xticks([p + 1.5 * width for p in pos])
@@ -93,9 +93,13 @@ def grouped_barchart(data1, data2, data3):
     plt.show()
 
 
-pickle_location_max = 'average_max/'
-pickle_location_sum = 'average_sum/'
-pickle_location_l2 = 'average_l2/'
+pickle_location_max = 'train_max/'
+pickle_location_sum = 'train_sum/'
+pickle_location_l2 = 'train_l2/'
+
+penn_loc = 'train_sum/'
+zech_loc = 'czech_dep/'
+
 files_penn_l2 = [
     'all_max_l2_penn_one_layer',
     'all_med_l2_penn_one_layer',
@@ -115,11 +119,21 @@ files_penn_max = [
     'med_l_med_max_penn_one_layer'
     ]
 
-max_data = load_obj(pickle_location_max + files_penn_max[0])
-sum_data = load_obj(pickle_location_sum + files_penn_sum[0])
-l2_data = load_obj(pickle_location_l2 + files_penn_l2[0])
+files_zech_sum = [
+    'all_max_sum_zech_one_layer',
+    'all_med_sum_zech_one_layer',
+    'max_l_med_sum_zech_one_layer',
+    'med_l_med_sum_zech_one_layer'
+    ]
+
+max_data = load_obj(pickle_location_max + files_penn_max[1])
+sum_data = load_obj(pickle_location_sum + files_penn_sum[1])
+l2_data = load_obj(pickle_location_l2 + files_penn_l2[1])
 for key, value in max_data.items():
     print(key)
     print(sorted(value))
     print()
 grouped_barchart(max_data, sum_data, l2_data)
+
+penn_data = load_obj(penn_loc + files_penn_sum[1])
+czech_data = load_obj(zech_loc + files_zech_sum[1])
